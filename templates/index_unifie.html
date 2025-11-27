@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transport Kinshasa - Itinéraires Intelligents</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #1e3a5f;
+            color: #333;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .control-panel {
+            width: 400px;
+            background: white;
+            padding: 0;
+            overflow-y: auto;
+            box-shadow: -2px 0 20px rgba(0,0,0,0.3);
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+            position: relative;
+            z-index: 1000;
+        }
+
+        .control-panel.collapsed {
+            transform: translateX(calc(100% - 60px));
+        }
+
+        .panel-toggle {
+            position: absolute;
+            left: -40px;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: #2c5aa0;
+            border: none;
+            border-radius: 8px 0 0 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 1.2em;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .panel-header h1 {
+            font-size: 1.4em;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .panel-header p {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .panel-content {
+            padding: 20px;
+        }
+
+        .transport-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .transport-btn {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .transport-btn.active {
+            background: #2c5aa0;
+            color: white;
+            border-color: #2c5aa0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(44, 90, 160, 0.3);
+        }
+
+        .transport-btn .icon {
+            font-size: 1.2em;
+        }
+
+        .path-info {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #2c5aa0;
+        }
+
+        .path-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .stat-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #2c5aa0;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .steps {
+            margin-top: 20px;
+        }
+
+        .step {
+            background: white;
+            padding: 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .step-number {
+            background: #2c5aa0;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-header {
+            font-weight: 600;
+            color: #2c5aa0;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .step-details {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .legend {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 220px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .legend h4 {
+            margin-bottom: 12px;
+            color: #2c5aa0;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-align: center;
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 0.8em;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            margin-right: 10px;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .node-depart { 
+            background: #e74c3c;
+            border-radius: 50%;
+        }
+        .node-arrivee { 
+            background: #27ae60;
+            border-radius: 50%;
+        }
+        .node-intermediaire { 
+            background: #3498db;
+            border-radius: 50%;
+        }
+        .route-distance { background: #e67e22; }
+        .route-temps { background: #9b59b6; }
+        .route-secondaire { 
+            background: #bdc3c7;
+            border-style: dashed;
+        }
+
+        .tutorial-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            z-index: 2000;
+            max-width: 400px;
+            text-align: center;
+            border: 2px solid #2c5aa0;
+        }
+
+        .tutorial-overlay h3 {
+            color: #2c5aa0;
+            margin-bottom: 15px;
+        }
+
+        .tutorial-overlay p {
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .tutorial-btn {
+            background: #2c5aa0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+
+        .node-marker {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8em;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            border: 2px solid;
+            color: #2c5aa0;
+        }
+
+        .edge-label {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 1px solid #e0e0e0;
+            color: #2c5aa0;
+        }
+
+        .network-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .network-card {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .network-value {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #2c5aa0;
+        }
+
+        .network-label {
+            font-size: 0.7em;
+            color: #666;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-container">
+            <div id="map"></div>
+            
+            <div class="legend">
+                <h4>🔄 LÉGENDE</h4>
+                <div class="legend-item">
+                    <div class="legend-color node-depart"></div>
+                    <span>Départ (Rond-Point)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color node-arrivee"></div>
+                    <span>Arrivée (Gare)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color node-intermediaire"></div>
+                    <span>Arrêts intermédiaires</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color route-distance"></div>
+                    <span>Chemin le plus court</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color route-temps"></div>
+                    <span>Chemin le plus rapide</span>
+                </div>
+            </div>
+
+            <!-- Tutoriel initial -->
+            <div id="tutorial" class="tutorial-overlay">
+                <h3>🎯 Bienvenue sur Transport Kinshasa</h3>
+                <p><strong>Comment utiliser l'application :</strong></p>
+                <p>• <strong>Points ronds colorés</strong> = Arrêts de transport</p>
+                <p>• <strong>Lignes colorées</strong> = Routes possibles</p>
+                <p>• <strong>Cliquez sur les éléments</strong> pour voir les détails</p>
+                <p>• <strong>Utilisez les boutons</strong> pour calculer les itinéraires optimaux</p>
+                <button class="tutorial-btn" onclick="fermerTutoriel()">Commencer →</button>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button class="panel-toggle" onclick="basculerPanel()">☰</button>
+            
+            <div class="panel-header">
+                <h1>🚗 TRANSPORT KINSHASA</h1>
+                <p>Rond-Point Victoire → Gare Centrale</p>
+            </div>
+
+            <div class="panel-content">
+                <div class="network-info">
+                    <div class="network-card">
+                        <div class="network-value" id="node-count">-</div>
+                        <div class="network-label">ARRÊTS</div>
+                    </div>
+                    <div class="network-card">
+                        <div class="network-value" id="edge-count">-</div>
+                        <div class="network-label">ROUTES</div>
+                    </div>
+                </div>
+
+                <div class="transport-options">
+                    <button class="transport-btn active" onclick="calculerItineraire('distance')">
+                        <span class="icon">📏</span>
+                        <span>PLUS COURT</span>
+                    </button>
+                    <button class="transport-btn" onclick="calculerItineraire('temps')">
+                        <span class="icon">⏱️</span>
+                        <span>PLUS RAPIDE</span>
+                    </button>
+                </div>
+
+                <div id="path-info" class="path-info">
+                    <h4>🎯 GRAPHE ORIENTÉ</h4>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 8px;">
+                        Sélectionnez un mode de calcul pour voir l'itinéraire optimal entre le Rond-Point Victoire et la Gare Centrale.
+                    </p>
+                </div>
+
+                <div id="steps-container" class="steps"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // État de l'application
+        let appState = {
+            panelOuvert: true,
+            tutorielFerme: false
+        };
+
+        // Initialisation de la carte
+        const map = L.map('map').setView([-4.310, 15.310], 13);
+
+        // Couche OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        // Variables pour stocker les éléments de la carte
+        let nodeMarkers = [];
+        let edgeLines = [];
+        let edgeLabels = [];
+        let currentPath = [];
+
+        // Fonctions d'interface
+        function basculerPanel() {
+            const panel = document.querySelector('.control-panel');
+            panel.classList.toggle('collapsed');
+            appState.panelOuvert = !panel.classList.contains('collapsed');
+        }
+
+        function fermerTutoriel() {
+            document.getElementById('tutorial').style.display = 'none';
+            appState.tutorielFerme = true;
+        }
+
+        // Chargement des données du réseau
+        fetch('/api/network')
+            .then(response => response.json())
+            .then(data => {
+                // Mettre à jour les statistiques
+                document.getElementById('node-count').textContent = data.nodes.length;
+                document.getElementById('edge-count').textContent = data.edges.length;
+                
+                // Afficher le graphe complet sur la carte
+                afficherGrapheComplet(data);
+                
+                // Calculer l'itinéraire par défaut
+                setTimeout(() => calculerItineraire('distance'), 1000);
+            });
+
+        function afficherGrapheComplet(data) {
+            // Nettoyer l'affichage précédent
+            nettoyerAffichage();
+
+            // Afficher tous les nœuds (arrêts) avec des formes différentes
+            data.nodes.forEach(node => {
+                let markerColor, borderColor, markerShape;
+                if (node.type === 'depart') {
+                    markerColor = '#e74c3c';
+                    borderColor = '#c0392b';
+                    markerShape = 'circle';
+                } else if (node.type === 'arrivee') {
+                    markerColor = '#27ae60';
+                    borderColor = '#229954';
+                    markerShape = 'circle';
+                } else {
+                    markerColor = '#3498db';
+                    borderColor = '#2980b9';
+                    markerShape = 'circle';
+                }
+
+                // Créer un marqueur selon la forme
+                let marker;
+                if (markerShape === 'circle') {
+                    marker = L.circleMarker([node.lat, node.lon], {
+                        color: borderColor,
+                        weight: 3,
+                        fillColor: markerColor,
+                        fillOpacity: 0.9,
+                        radius: 10
+                    }).addTo(map);
+                }
+
+                // Ajouter une étiquette avec le nom du nœud
+                const label = L.marker([node.lat + 0.00015, node.lon], {
+                    icon: L.divIcon({
+                        className: 'node-marker',
+                        html: `<div style="color: ${markerColor}; font-weight: bold;">${node.name}</div>`,
+                        iconSize: [120, 25],
+                        iconAnchor: [60, 12]
+                    })
+                }).addTo(map);
+
+                // Popup d'information détaillée
+                marker.bindPopup(`
+                    <div style="min-width: 200px; text-align: center;">
+                        <div style="font-size: 1.1em; font-weight: bold; color: ${markerColor}; margin-bottom: 8px;">
+                            ${node.name}
+                        </div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 6px; margin: 8px 0;">
+                            <strong>${node.type === 'depart' ? '📍 DÉPART' : node.type === 'arrivee' ? '🎯 ARRIVÉE' : '🚏 ARRÊT'}</strong>
+                        </div>
+                        <div style="font-size: 0.8em; color: #666;">
+                            <div>Coordonnées GPS :</div>
+                            <div>${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}</div>
+                        </div>
+                    </div>
+                `);
+
+                nodeMarkers.push(marker);
+                nodeMarkers.push(label);
+            });
+
+            // Afficher toutes les arêtes (routes)
+            data.edges.forEach(edge => {
+                const fromNode = data.nodes.find(n => n.id === edge.from);
+                const toNode = data.nodes.find(n => n.id === edge.to);
+
+                // Style des routes secondaires
+                const line = L.polyline([
+                    [fromNode.lat, fromNode.lon],
+                    [toNode.lat, toNode.lon]
+                ], {
+                    color: '#bdc3c7',
+                    weight: 4,
+                    opacity: 0.7,
+                    dashArray: '5, 5'
+                }).addTo(map);
+
+                // Calculer la position pour l'étiquette
+                const midLat = (fromNode.lat + toNode.lat) / 2;
+                const midLon = (fromNode.lon + toNode.lon) / 2;
+
+                // Ajouter une étiquette discrète
+                const label = L.marker([midLat, midLon], {
+                    icon: L.divIcon({
+                        className: 'edge-label',
+                        html: `${edge.distance}km`,
+                        iconSize: [45, 20],
+                        iconAnchor: [22, 10]
+                    })
+                }).addTo(map);
+
+                // Popup informatif pour la route
+                line.bindPopup(`
+                    <div style="min-width: 220px;">
+                        <div style="font-weight: bold; color: #2c5aa0; margin-bottom: 8px;">
+                            🛣️ ${edge.route}
+                        </div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 6px; margin: 8px 0;">
+                            <div><strong>De :</strong> ${fromNode.name}</div>
+                            <div><strong>À :</strong> ${toNode.name}</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
+                            <div style="background: #e8f5e9; padding: 4px; border-radius: 4px;">
+                                📏 ${edge.distance} km
+                            </div>
+                            <div style="background: #e3f2fd; padding: 4px; border-radius: 4px;">
+                                ⏱️ ${edge.time} min
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                edgeLines.push(line);
+                edgeLabels.push(label);
+            });
+        }
+
+        function calculerItineraire(criteria) {
+            // Mettre à jour les boutons
+            document.querySelectorAll('.transport-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            fetch(`/api/shortest-path/RP_VICTOIRE/GARE_CENTRALE`)
+                .then(response => response.json())
+                .then(itineraire => {
+                    if (itineraire) {
+                        afficherItineraire(itineraire, criteria);
+                    }
+                });
+        }
+
+        function afficherItineraire(itineraire, criteria) {
+            // Nettoyer l'affichage du chemin précédent
+            currentPath.forEach(line => map.removeLayer(line));
+            currentPath = [];
+
+            // Styles selon le critère
+            const routeColor = criteria === 'distance' ? '#e67e22' : '#9b59b6';
+            const routeWeight = 6;
+            const routeOpacity = 0.9;
+
+            // Afficher le chemin optimal
+            itineraire.path_coords.forEach(segment => {
+                const routeLine = L.polyline(segment, {
+                    color: routeColor,
+                    weight: routeWeight,
+                    opacity: routeOpacity,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(map);
+
+                currentPath.push(routeLine);
+            });
+
+            // Mettre à jour l'interface
+            document.getElementById('path-info').innerHTML = `
+                <h4>${criteria === 'distance' ? '📏 CHEMIN LE PLUS COURT' : '⏱️ CHEMIN LE PLUS RAPIDE'}</h4>
+                <div class="path-stats">
+                    <div class="stat">
+                        <div class="stat-value">${itineraire.total_distance} km</div>
+                        <div class="stat-label">DISTANCE TOTALE</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${itineraire.total_time} min</div>
+                        <div class="stat-label">TEMPS ESTIMÉ</div>
+                    </div>
+                </div>
+                <p style="font-size: 0.9em; margin-top: 10px; color: #666;">
+                    <strong>Itinéraire :</strong> ${itineraire.path.join(' → ')}
+                </p>
+            `;
+
+            // Afficher les étapes détaillées
+            const stepsContainer = document.getElementById('steps-container');
+            stepsContainer.innerHTML = '<h4 style="color: #2c5aa0; margin-bottom: 15px; font-size: 0.9em;">📋 DÉTAIL DES ÉTAPES :</h4>';
+
+            itineraire.steps.forEach((step, index) => {
+                const stepElement = document.createElement('div');
+                stepElement.className = 'step';
+                stepElement.innerHTML = `
+                    <div class="step-number">${index + 1}</div>
+                    <div class="step-content">
+                        <div class="step-header">${step.from} → ${step.to}</div>
+                        <div class="step-details">
+                            <strong>${step.route}</strong><br>
+                            Distance: ${step.distance} km • Temps: ${step.time} min
+                        </div>
+                    </div>
+                `;
+                stepsContainer.appendChild(stepElement);
+            });
+
+            // Ajuster la vue pour montrer l'itinéraire complet
+            const bounds = [];
+            itineraire.path_coords.forEach(segment => {
+                segment.forEach(coord => {
+                    bounds.push([coord[1], coord[0]]);
+                });
+            });
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        function nettoyerAffichage() {
+            // Nettoyer tous les éléments
+            [...nodeMarkers, ...edgeLines, ...edgeLabels, ...currentPath].forEach(element => {
+                if (element && map.hasLayer(element)) {
+                    map.removeLayer(element);
+                }
+            });
+            
+            nodeMarkers = [];
+            edgeLines = [];
+            edgeLabels = [];
+            currentPath = [];
+        }
+
+        // Fermer le tutoriel si on clique ailleurs
+        document.addEventListener('click', function(event) {
+            const tutorial = document.getElementById('tutorial');
+            if (tutorial && !tutorial.contains(event.target) && !appState.tutorielFerme) {
+                fermerTutoriel();
+            }
+        });
+    </script>
+</body>
+</html>
