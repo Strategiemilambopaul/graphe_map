@@ -370,8 +370,16 @@
         }
         .route-distance { background: var(--accent-color); }
         .route-temps { background: #9b59b6; }
-        .route-secondaire { 
-            background: #bdc3c7;
+        .route-express { 
+            background: #e74c3c;
+            border-style: solid;
+        }
+        .route-principale { 
+            background: #3498db;
+            border-style: solid;
+        }
+        .route-alternative { 
+            background: #f39c12;
             border-style: dashed;
         }
 
@@ -496,6 +504,37 @@
             100% { transform: rotate(360deg); }
         }
 
+        .route-type-filter {
+            margin: 15px 0;
+            padding: 15px;
+            background: var(--bg-light);
+            border-radius: var(--border-radius);
+        }
+
+        .filter-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .filter-btn {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.8em;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
         /* RESPONSIVE DESIGN */
         @media (max-width: 1024px) {
             .control-panel {
@@ -603,6 +642,10 @@
             .panel-header h1 {
                 font-size: 1.2em;
             }
+
+            .filter-buttons {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 480px) {
@@ -668,18 +711,18 @@
                 color: var(--text-color);
             }
 
-            .transport-btn {
+            .transport-btn, .filter-btn {
                 background: #4a5568;
                 color: var(--text-color);
                 border-color: #4a5568;
             }
 
-            .transport-btn.active {
+            .transport-btn.active, .filter-btn.active {
                 background: var(--primary-color);
                 color: white;
             }
 
-            .stat, .step, .network-card {
+            .stat, .step, .network-card, .route-type-filter {
                 background: #4a5568;
                 color: var(--text-color);
                 border-color: #718096;
@@ -702,7 +745,7 @@
                 --shadow: 0 2px 10px rgba(0,0,0,0.3);
             }
 
-            .transport-btn {
+            .transport-btn, .filter-btn {
                 border-width: 3px;
             }
         }
@@ -714,7 +757,7 @@
                 animation: none !important;
             }
             
-            .step:hover, .stat:hover, .transport-btn:hover {
+            .step:hover, .stat:hover, .transport-btn:hover, .filter-btn:hover {
                 transform: none !important;
             }
         }
@@ -746,6 +789,18 @@
                     <div class="legend-item">
                         <div class="legend-color node-intermediaire"></div>
                         <span>Arrêts</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color route-principale"></div>
+                        <span>Routes principales</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color route-alternative"></div>
+                        <span>Routes alternatives</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color route-express"></div>
+                        <span>Routes express</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color route-distance"></div>
@@ -794,6 +849,16 @@
                         </div>
                     </div>
 
+                    <div class="route-type-filter">
+                        <h4 style="color: var(--primary-color); margin-bottom: 10px; font-size: 0.9em;">🎯 FILTRER PAR TYPE DE ROUTE</h4>
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" onclick="filtrerRoutes('tous')">Tous</button>
+                            <button class="filter-btn" onclick="filtrerRoutes('principale')">Principales</button>
+                            <button class="filter-btn" onclick="filtrerRoutes('alternative')">Alternatives</button>
+                            <button class="filter-btn" onclick="filtrerRoutes('express')">Express</button>
+                        </div>
+                    </div>
+
                     <div class="transport-options">
                         <button class="transport-btn active" onclick="calculerItineraire('distance')">
                             <span class="icon">📏</span>
@@ -823,7 +888,11 @@
         let appState = {
             panelOuvert: true,
             tutorielFerme: false,
-            isMobile: window.innerWidth <= 768
+            isMobile: window.innerWidth <= 768,
+            donneesReseau: null,
+            filtresActifs: {
+                typeRoute: 'tous'
+            }
         };
 
         // Détection mobile
@@ -875,36 +944,38 @@
             document.getElementById('loadingSpinner').style.display = afficher ? 'block' : 'none';
         }
 
-        // Chargement des données du réseau
+        // Chargement des données du réseau depuis l'API
         function chargerDonnees() {
             afficherChargement(true);
             
-            // Simulation de données pour la démonstration
-            const donneesSimulees = {
-                nodes: [
-                    { id: 1, name: "Rond-Point Victoire", type: "depart", lat: -4.310, lon: 15.310 },
-                    { id: 2, name: "Marché Central", type: "intermediaire", lat: -4.305, lon: 15.315 },
-                    { id: 3, name: "Stade des Martyrs", type: "intermediaire", lat: -4.315, lon: 15.320 },
-                    { id: 4, name: "Gare Centrale", type: "arrivee", lat: -4.320, lon: 15.325 }
-                ],
-                edges: [
-                    { from: 1, to: 2, route: "Avenue de la Révolution", distance: 2.5, time: 10 },
-                    { from: 1, to: 3, route: "Boulevard Lumumba", distance: 3.2, time: 12 },
-                    { from: 2, to: 4, route: "Avenue du Commerce", distance: 4.1, time: 15 },
-                    { from: 3, to: 4, route: "Route de l'Aéroport", distance: 3.8, time: 14 }
-                ]
-            };
-            
-            // Mettre à jour les statistiques
-            document.getElementById('node-count').textContent = donneesSimulees.nodes.length;
-            document.getElementById('edge-count').textContent = donneesSimulees.edges.length;
-            
-            // Afficher le graphe complet sur la carte
-            afficherGrapheComplet(donneesSimulees);
-            
-            // Calculer l'itinéraire par défaut
-            setTimeout(() => calculerItineraire('distance'), 500);
-            afficherChargement(false);
+            fetch('/api/network')
+                .then(response => {
+                    if (!response.ok) throw new Error('Erreur réseau');
+                    return response.json();
+                })
+                .then(data => {
+                    appState.donneesReseau = data;
+                    
+                    // Mettre à jour les statistiques
+                    document.getElementById('node-count').textContent = data.nodes.length;
+                    document.getElementById('edge-count').textContent = data.edges.length;
+                    
+                    // Afficher le graphe complet sur la carte
+                    afficherGrapheComplet(data);
+                    
+                    // Calculer l'itinéraire par défaut
+                    setTimeout(() => calculerItineraire('distance'), 500);
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    document.getElementById('path-info').innerHTML = `
+                        <h4>❌ Erreur</h4>
+                        <p style="color: var(--danger-color);">Impossible de charger les données: ${error.message}</p>
+                    `;
+                })
+                .finally(() => {
+                    afficherChargement(false);
+                });
         }
 
         function afficherGrapheComplet(data) {
@@ -955,6 +1026,7 @@
                         </div>
                         <div style="font-size: 0.8em; color: var(--text-light);">
                             <div>Coordonnées : ${node.lat.toFixed(4)}, ${node.lon.toFixed(4)}</div>
+                            <div>${node.description || ''}</div>
                         </div>
                     </div>
                 `);
@@ -967,14 +1039,44 @@
                 const fromNode = data.nodes.find(n => n.id === edge.from);
                 const toNode = data.nodes.find(n => n.id === edge.to);
 
+                if (!fromNode || !toNode) return;
+
+                // Style selon le type de route
+                let lineColor, lineWeight, lineOpacity, dashArray;
+                switch(edge.type_route) {
+                    case 'express':
+                        lineColor = '#e74c3c';
+                        lineWeight = 5;
+                        lineOpacity = 0.8;
+                        dashArray = null;
+                        break;
+                    case 'principale':
+                        lineColor = '#3498db';
+                        lineWeight = 4;
+                        lineOpacity = 0.7;
+                        dashArray = null;
+                        break;
+                    case 'alternative':
+                        lineColor = '#f39c12';
+                        lineWeight = 3;
+                        lineOpacity = 0.6;
+                        dashArray = '5, 5';
+                        break;
+                    default:
+                        lineColor = '#bdc3c7';
+                        lineWeight = 2;
+                        lineOpacity = 0.5;
+                        dashArray = '5, 5';
+                }
+
                 const line = L.polyline([
                     [fromNode.lat, fromNode.lon],
                     [toNode.lat, toNode.lon]
                 ], {
-                    color: '#bdc3c7',
-                    weight: 4,
-                    opacity: 0.7,
-                    dashArray: '5, 5'
+                    color: lineColor,
+                    weight: lineWeight,
+                    opacity: lineOpacity,
+                    dashArray: dashArray
                 }).addTo(map);
 
                 const midLat = (fromNode.lat + toNode.lat) / 2;
@@ -1006,12 +1108,30 @@
                                 ⏱️ ${edge.time} min
                             </div>
                         </div>
+                        <div style="margin-top: 8px; font-size: 0.8em; color: var(--text-light);">
+                            Type: ${edge.type_route} • Vitesse: ${edge.vitesse_moyenne} km/h
+                        </div>
                     </div>
                 `);
 
                 edgeLines.push(line);
                 edgeLabels.push(label);
             });
+        }
+
+        function filtrerRoutes(typeRoute) {
+            // Mettre à jour les boutons de filtre
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            appState.filtresActifs.typeRoute = typeRoute;
+            
+            // Recharger l'affichage avec les filtres
+            if (appState.donneesReseau) {
+                afficherGrapheComplet(appState.donneesReseau);
+            }
         }
 
         function calculerItineraire(criteria) {
@@ -1023,37 +1143,28 @@
 
             afficherChargement(true);
 
-            // Simulation d'un itinéraire
-            setTimeout(() => {
-                const itineraireSimule = {
-                    total_distance: criteria === 'distance' ? '5.7' : '6.2',
-                    total_time: criteria === 'distance' ? '22' : '18',
-                    path: ['Rond-Point Victoire', 'Marché Central', 'Gare Centrale'],
-                    path_coords: [
-                        [[-4.310, 15.310], [-4.305, 15.315]],
-                        [[-4.305, 15.315], [-4.320, 15.325]]
-                    ],
-                    steps: [
-                        {
-                            from: 'Rond-Point Victoire',
-                            to: 'Marché Central',
-                            route: 'Avenue de la Révolution',
-                            distance: '2.5',
-                            time: '10'
-                        },
-                        {
-                            from: 'Marché Central',
-                            to: 'Gare Centrale',
-                            route: 'Avenue du Commerce',
-                            distance: '3.2',
-                            time: '12'
-                        }
-                    ]
-                };
-                
-                afficherItineraire(itineraireSimule, criteria);
-                afficherChargement(false);
-            }, 1000);
+            fetch(`/api/shortest-path/${criteria}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Erreur API');
+                    return response.json();
+                })
+                .then(itineraire => {
+                    if (itineraire && !itineraire.error) {
+                        afficherItineraire(itineraire, criteria);
+                    } else {
+                        throw new Error(itineraire?.error || 'Aucun itinéraire trouvé');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    document.getElementById('path-info').innerHTML = `
+                        <h4>❌ Erreur</h4>
+                        <p style="color: var(--danger-color);">${error.message}</p>
+                    `;
+                })
+                .finally(() => {
+                    afficherChargement(false);
+                });
         }
 
         function afficherItineraire(itineraire, criteria) {
@@ -1090,6 +1201,14 @@
                         <div class="stat-value">${itineraire.total_time} min</div>
                         <div class="stat-label">TEMPS ESTIMÉ</div>
                     </div>
+                    <div class="stat">
+                        <div class="stat-value">${itineraire.vitesse_moyenne} km/h</div>
+                        <div class="stat-label">VITESSE MOYENNE</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${itineraire.efficacite}</div>
+                        <div class="stat-label">EFFICACITÉ</div>
+                    </div>
                 </div>
                 <p style="font-size: 0.9em; margin-top: 10px; color: var(--text-light);">
                     <strong>Itinéraire :</strong> ${itineraire.path.join(' → ')}
@@ -1108,8 +1227,9 @@
                     <div class="step-content">
                         <div class="step-header">${step.from} → ${step.to}</div>
                         <div class="step-details">
-                            <strong>${step.route}</strong><br>
-                            Distance: ${step.distance} km • Temps: ${step.time} min
+                            <strong>${step.route}</strong> (${step.type_route})<br>
+                            Distance: ${step.distance} km • Temps: ${step.time} min<br>
+                            Vitesse: ${step.vitesse_moyenne} km/h
                         </div>
                     </div>
                 `;
