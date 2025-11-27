@@ -91,7 +91,7 @@ class TransportSystem:
         for node_id, info in locations.items():
             self.G.add_node(node_id, **info)
         
-        # DÉFINITION DES CONNEXIONS AVEC COORDONNÉES RÉELLES
+        # DÉFINITION DES CONNEXIONS
         connections = [
             # Routes principales (vitesse moyenne 25 km/h)
             ('RP_VICTOIRE', 'PLACE_VICTOIRE', 'Boulevard Triomphal', 'principale'),
@@ -120,7 +120,6 @@ class TransportSystem:
                 self.G.nodes[arr]['lat'], self.G.nodes[arr]['lon']
             )
             
-            # Calcul du temps basé sur le type de route et distance
             temps = self.calculer_temps_trajet(distance, type_route)
             
             self.G.add_edge(
@@ -134,20 +133,16 @@ class TransportSystem:
     
     def calculer_distance_reelle(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Calcule la distance réelle entre deux points GPS avec formule Haversine"""
-        # Rayon de la Terre en km
         R = 6371.0
-        
-        # Conversion en radians
         lat1_rad = math.radians(lat1)
         lon1_rad = math.radians(lon1)
         lat2_rad = math.radians(lat2)
+        lat2_rad = math.radians(lat2)
         lon2_rad = math.radians(lon2)
         
-        # Différences
         dlat = lat2_rad - lat1_rad
         dlon = lon2_rad - lon1_rad
         
-        # Formule de Haversine
         a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         
@@ -156,19 +151,18 @@ class TransportSystem:
     
     def calculer_temps_trajet(self, distance: float, type_route: str) -> float:
         """Calcule le temps de trajet en minutes selon le type de route"""
-        # Vitesses moyennes en km/h (réalistes pour Kinshasa)
         vitesses = {
-            'principale': 25,    # Routes principales fluides
-            'alternative': 20,   # Routes secondaires
-            'express': 30        # Routes rapides
+            'principale': 25,     # Routes principales fluides (km/h)
+            'alternative': 20,    # Routes secondaires (km/h)
+            'express': 30         # non utilisé mais pour l'exemple (km/h)
         }
         
         vitesse = vitesses.get(type_route, 20)
         temps_heures = distance / vitesse
         temps_minutes = temps_heures * 60
         
-        # Ajout d'un facteur de trafic réaliste pour Kinshasa
-        facteur_trafic = 1.3 if type_route == 'principale' else 1.15
+        # Facteur de trafic réaliste pour Kinshasa
+        facteur_trafic = 1.3 if type_route == 'principale' else 1.15 
         return temps_minutes * facteur_trafic
     
     def get_shortest_path(self, start: str, end: str, criteria: str = 'distance') -> Optional[Dict]:
@@ -179,11 +173,9 @@ class TransportSystem:
             
             path = nx.shortest_path(self.G, start, end, weight=criteria)
             
-            # Calcul des totaux
             total_distance = sum(self.G[path[i]][path[i+1]]['distance'] for i in range(len(path)-1))
             total_time = sum(self.G[path[i]][path[i+1]]['temps'] for i in range(len(path)-1))
             
-            # Préparation des étapes
             steps = []
             path_coords = []
             
@@ -209,7 +201,6 @@ class TransportSystem:
                     }
                 })
                 
-                # Coordonnées pour la carte
                 path_coords.append([
                     [self.G.nodes[dep]['lon'], self.G.nodes[dep]['lat']],
                     [self.G.nodes[arr]['lon'], self.G.nodes[arr]['lat']]
@@ -243,7 +234,7 @@ class TransportSystem:
             return "Faible"
     
     def get_all_paths(self) -> Dict:
-        """Retourne tous les chemins optimaux avec comparaison"""
+        """Retourne les deux chemins optimaux (distance et temps) avec comparaison"""
         by_distance = self.get_shortest_path('RP_VICTOIRE', 'GARE_CENTRALE', 'distance')
         by_time = self.get_shortest_path('RP_VICTOIRE', 'GARE_CENTRALE', 'temps')
         
@@ -265,9 +256,62 @@ class TransportSystem:
             'gain_temps_minutes': round(gain_temps, 1),
             'gain_temps_pourcentage': round((gain_temps / chemin_distance['total_time']) * 100, 1),
             'gain_distance_km': round(gain_distance, 2),
-            'recommandation': "Temps" if gain_temps > 5 else "Distance"
+            'recommandation': "Temps" if gain_temps > 1 else "Distance"
         }
-    
+
+    def get_all_simple_paths(self) -> List[Dict]:
+        """
+        Retourne tous les chemins simples (sans boucle) entre RP_VICTOIRE et GARE_CENTRALE,
+        calculant la distance totale et le temps total pour chaque chemin.
+        """
+        start = 'RP_VICTOIRE'
+        end = 'GARE_CENTRALE'
+        all_paths_data = []
+
+        try:
+            # 1. Utiliser networkx.all_simple_paths pour trouver tous les chemins
+            for path_nodes in nx.all_simple_paths(self.G, source=start, target=end):
+                total_distance = 0.0
+                total_time = 0.0
+                path_steps = []
+
+                # 2. Calculer les totaux pour chaque chemin
+                for i in range(len(path_nodes) - 1):
+                    dep = path_nodes[i]
+                    arr = path_nodes[i+1]
+                    edge_data = self.G[dep][arr]
+                    
+                    total_distance += edge_data['distance']
+                    total_time += edge_data['temps']
+                    
+                    path_steps.append({
+                        'from': self.G.nodes[dep]['nom'],
+                        'to': self.G.nodes[arr]['nom'],
+                        'route': edge_data['nom_route'],
+                        'type': edge_data['type_route'],
+                        'time': round(edge_data['temps'], 1),
+                        'distance': round(edge_data['distance'], 3)
+                    })
+
+                # 3. Stocker le chemin et ses métriques
+                all_paths_data.append({
+                    'path': [self.G.nodes[node]['nom'] for node in path_nodes],
+                    'path_ids': path_nodes,
+                    'total_distance_km': round(total_distance, 3),
+                    'total_time_min': round(total_time, 1),
+                    'vitesse_moyenne': round(total_distance / (total_time / 60), 1) if total_time > 0 else 0,
+                    'nombre_etapes': len(path_steps),
+                    'steps': path_steps
+                })
+
+            # 4. Trier les chemins par durée totale (le plus rapide en premier)
+            all_paths_data.sort(key=lambda x: x['total_time_min'])
+            
+            return all_paths_data
+        
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            return []
+
     def get_network_stats(self) -> Dict:
         """Retourne les statistiques détaillées du réseau"""
         stats = {
@@ -338,9 +382,11 @@ class TransportSystem:
 # Initialisation du système
 transport = TransportSystem()
 
+# --- ROUTES FLASK ---
+
 @app.route('/')
 def index():
-    """Page principale de l'application"""
+    """Page principale de l'application (requiert index_unifie.html)"""
     return render_template('index_unifie.html')
 
 @app.route('/api/network')
@@ -377,7 +423,6 @@ def get_network():
         'stats': transport.get_network_stats(),
         'metadata': {
             'version': '3.0',
-            'last_updated': '2024-01-01',
             'city': 'Kinshasa',
             'description': 'Réseau de transport Rond-Point Victoire → Gare Centrale'
         }
@@ -385,7 +430,7 @@ def get_network():
 
 @app.route('/api/shortest-path/<criteria>')
 def shortest_path(criteria):
-    """API: Chemin optimal selon le critère"""
+    """API: Chemin optimal selon le critère ('distance' ou 'temps')"""
     if criteria not in ['distance', 'temps']:
         return jsonify({"error": "Critère invalide. Utilisez 'distance' ou 'temps'"}), 400
     
@@ -397,8 +442,23 @@ def shortest_path(criteria):
 
 @app.route('/api/all-paths')
 def all_paths():
-    """API: Tous les chemins optimaux avec comparaison"""
+    """API: Les deux chemins optimaux (distance et temps) avec comparaison"""
     return jsonify(transport.get_all_paths())
+
+@app.route('/api/all-simple-paths')
+def all_simple_paths():
+    """API: Retourne la liste de tous les chemins simples possibles entre RP_VICTOIRE et GARE_CENTRALE, triés par durée."""
+    all_paths = transport.get_all_simple_paths()
+    
+    if not all_paths:
+        return jsonify({"error": "Aucun chemin simple trouvé entre les points spécifiés"}), 404
+    
+    return jsonify({
+        'start_node': transport.G.nodes['RP_VICTOIRE']['nom'],
+        'end_node': transport.G.nodes['GARE_CENTRALE']['nom'],
+        'total_paths': len(all_paths),
+        'paths': all_paths
+    })
 
 @app.route('/api/stats')
 def stats():
@@ -422,7 +482,6 @@ def health():
             "status": "OK", 
             "message": "Transport Kinshasa opérationnel",
             "version": "3.0",
-            "timestamp": "2024-01-01T00:00:00Z",
             "network_stats": stats,
             "diagnostics": {
                 "graph_connected": nx.is_weakly_connected(transport.G),
@@ -437,64 +496,24 @@ def health():
             "message": f"Erreur système: {str(e)}"
         }), 500
 
-@app.route('/api/search/<query>')
-def search_nodes(query):
-    """API: Recherche de nœuds par nom"""
-    query = query.lower()
-    results = []
-    
-    for node_id in transport.G.nodes():
-        node_data = transport.G.nodes[node_id]
-        node_name = node_data['nom'].lower()
-        node_desc = node_data.get('description', '').lower()
-        
-        if query in node_name or query in node_desc:
-            results.append({
-                'id': node_id,
-                'name': node_data['nom'],
-                'type': node_data['type'],
-                'description': node_data.get('description', ''),
-                'lat': node_data['lat'],
-                'lon': node_data['lon']
-            })
-    
-    return jsonify({
-        'query': query,
-        'results': results,
-        'count': len(results)
-    })
+# --- GESTION DES ERREURS ---
 
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({
         "error": "Endpoint non trouvé",
         "available_endpoints": [
-            "/api/network",
-            "/api/shortest-path/{distance|temps}",
-            "/api/all-paths", 
-            "/api/stats",
-            "/api/node/{node_id}",
-            "/api/health",
-            "/api/search/{query}"
+            "/api/network", "/api/shortest-path/{distance|temps}", "/api/all-paths", 
+            "/api/all-simple-paths", "/api/stats", "/api/node/{node_id}",
+            "/api/health"
         ]
     }), 404
 
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({
-        "error": "Erreur interne du serveur",
-        "message": "Veuillez réessayer plus tard"
-    }), 500
-
-@app.errorhandler(400)
-def bad_request(error):
-    return jsonify({
-        "error": "Requête invalide",
-        "message": "Vérifiez les paramètres de votre requête"
-    }), 400
+# --- LANCEMENT DE L'APPLICATION ---
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
     
+    print(f"Démarrage de l'application Flask sur le port {port}. DEBUG={debug}")
     app.run(host='0.0.0.0', port=port, debug=debug)
