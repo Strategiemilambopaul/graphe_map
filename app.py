@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify
 import networkx as nx
 import math
+import os
 
 app = Flask(__name__)
 
@@ -111,7 +112,7 @@ class TransportSystem:
     
     def calculer_temps(self, distance):
         """Estime le temps de trajet en minutes (vitesse moyenne 20km/h en ville)"""
-        return int((distance / 20) * 60)  # 20km/h vitesse moyenne
+        return int((distance / 20) * 60)
     
     def get_shortest_path(self, start, end, criteria='distance'):
         try:
@@ -135,7 +136,6 @@ class TransportSystem:
                     'route': edge_data['nom_route']
                 })
                 
-                # Coordonnées pour l'affichage sur la carte
                 path_coords.append([
                     [self.G.nodes[dep]['lon'], self.G.nodes[dep]['lat']],
                     [self.G.nodes[arr]['lon'], self.G.nodes[arr]['lat']]
@@ -190,4 +190,5 @@ def get_network():
     return jsonify({'nodes': nodes, 'edges': edges})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5003)
+    port = int(os.environ.get('PORT', 5003))
+    app.run(host='0.0.0.0', port=port)
