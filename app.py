@@ -734,4 +734,5 @@ if __name__ == '__main__':
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
     
     print(f"Démarrage de l'application Flask sur le port {port}. DEBUG={debug}")
-    print(f"Réseau créé avec {
+    print(f"Réseau créé avec {transport.G.number_of_nodes()} nœuds et {transport.G.number_of_edges()} arêtes")
+    app.run(host='0.0.0.0', port=port, debug=debug)
